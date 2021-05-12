@@ -11,8 +11,40 @@ const tableName = 'words'
 // const words = ['Sunday', 'jump', 'magazine', 'champion', 'king', 'ribbon', 'ciao']
 
 class WordQuiz {
-  static async run () {
+  static run () {
+    if (argv.l !== undefined) {
+      this.listWords()
+    } else {
+      this.register()
+    }
+  }
+
+  static async listWords () {
+    const allRows = await Storage.selectAll().catch( err => {
+      console.error(err)
+      process.exit(1)
+    })
+    if (allRows.length === 0) {
+      console.log('登録されている単語がありません')
+      process.exit(0)
+    }
+    allRows.forEach(row => {
+      const word = new Word(
+        row.name,
+        JSON.parse(row.definitions),
+        new Date(row.updated_at),
+        new Date(row.created_at)
+      ).displayName()
+      console.log(word)
+      console.log(row.updated_at)
+      console.log(new Date(row.updated_at))
+    })
+  }
+
+  static async register () {
     let input_word = null
+    let word = null
+
     if (argv._.length === 3) {
       input_word = argv._[2]
     } else {
@@ -20,17 +52,28 @@ class WordQuiz {
     }
     const result = await wiktionary(input_word).catch(() => null)
     if (result === null || result.definitions.length === 0) {
-      console.log(`${input_word} can't receive any correct definitions from Wictionary`)
+      console.error(`${input_word} can't receive any correct definitions from Wictionary`)
+      process.exit(1)
     } else {
-      this.register(new Word(result.name, result.definitions))
+      word = new Word(result.word, result.definitions)
     }  
+
+    await Storage.insert(word)
+    word.displayDefinitions()
+    console.log('登録しました')
+  }
+}
+
+class Word {
+  constructor (name, definitions, updatedAt = new Date(), createdAt = new Date()) {
+    this.name = name
+    this.definitions = definitions
+    this.updatedAt = updatedAt
+    this.createdAt = createdAt
   }
 
-  static register (word) {
-    // console.log(word_data.word)
-
-    Storage.insert(word)
-    word.definitions.forEach(definition => {
+  displayDefinitions () {
+    this.definitions.forEach(definition => {
       console.log('- ' + definition.speech)
       const lines = definition.lines
       for (let j = 0; j < 3 && j < lines.length; j++) {
@@ -39,16 +82,10 @@ class WordQuiz {
         if (line.examples.length > 0) console.log("'" + line.examples[0] + "'")        
       }
     })
-    console.log('登録しました')
   }
-}
 
-class Word {
-  constructor (name, definitions) {
-    this.name = name
-    this.definitions = definitions
-    this.updatedAt = new Date()
-    this.createdAt = new Date()
+  displayName () {
+    console.log(`${this.name} ${this.updatedAt}`)
   }
 }
 
@@ -57,13 +94,30 @@ class Storage {
     const db = new sqlite3.Database(databaseName)
     db.run(`
       CREATE TABLE IF NOT EXISTS ${tableName} (
-        name TEXT primary key,
+        name TEXT PRIMARY KEY,
         definitions TEXT,
         updated_at NUMERIC,
         created_at NUMERIC        
       )
     `)
     return db
+  }
+
+  static async selectAll () {
+    const query = `SELECT name, definitions, updated_at, created_at FROM ${tableName}`
+    const db = this.connect()
+    return new Promise(function (resolve, reject) {
+      try {
+        db.all(query, function (error, rows) {
+          if (error) throw new Error(error)
+          resolve(rows)
+        })
+      } catch (e) {
+        return reject(e)
+      } finally {
+        db.close()
+      }
+    })
   }
 
   static insert (word) {
@@ -79,7 +133,7 @@ class Storage {
         const stmt = db.prepare(query)
         stmt.run(
           word.name,
-          word.definitions,
+          JSON.stringify(word.definitions),
           word.updatedAt,
           word.createdAt
           )
