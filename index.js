@@ -2,6 +2,7 @@ const wiktionary = require('wiktionary-node')
 // eslint-disable-next-line no-undef
 const argv = require('minimist')(process.argv)
 const sqlite3 = require('sqlite3').verbose()
+const { Select } = require('enquirer')
 
 // eslint-disable-next-line no-undef
 const currentDir = process.cwd()
@@ -14,12 +15,19 @@ class WordQuiz {
   static run () {
     if (argv.l !== undefined) {
       this.listWords()
+    } else if (argv.d !== undefined) {
+      this.deleteWords()
     } else {
       this.register()
     }
   }
 
   static async listWords () {
+    const words = await Word.all(await this.allRows())
+    words.forEach(word => console.log(word.displayTitle()))
+  }
+
+  static async allRows() {
     const allRows = await Storage.selectAll().catch( err => {
       console.error(err)
       process.exit(1)
@@ -28,43 +36,81 @@ class WordQuiz {
       console.log('登録されている単語がありません')
       process.exit(0)
     }
-    allRows.forEach(row => {
-      const word = new Word(
-        row.name,
-        JSON.parse(row.definitions),
-        new Date(row.updated_at),
-        new Date(row.created_at)
-      ).displayName()
-      console.log(word)
-      console.log(row.updated_at)
-      console.log(new Date(row.updated_at))
+    return allRows    
+  }
+
+  static async deleteWords () {
+    const allRows = await this.allRows()
+    const words = await Word.all(allRows)
+    const titles = words.map(word => word.displayTitle())
+    console.log(titles)
+    
+    const prompt = new Select({
+      name: '登録解除',
+      message: 'どの単語を解除しますか',
+      choices: titles
     })
+    prompt.run()
+      .then(() => {
+        const selectedId = titles.find(x => x.enabled).index // titlesに選択された情報(enabled)が入っている
+        const dbId = allRows[selectedId].rowid
+        console.log(dbId)
+        Storage.deleteBy(dbId)
+      })
+      .catch(console.error)
   }
 
   static async register () {
-    let input_word = null
     let word = null
+    let input_word = argv._[2]
 
-    if (argv._.length === 3) {
-      input_word = argv._[2]
+    if (argv.u === undefined) {
+      if (await Storage.exist(input_word)) {
+        this.showMessage('exist')
+        process.exit(0)
+      }
+      word = await this.fetchWictionary(input_word)
+      await Storage.insert(word)
     } else {
-      throw new Error('不正な引数')
+      word = await this.fetchWictionary(argv.u)
+      await Storage.update(word)
     }
+
+    word.displayDefinitions()
+    console.log('登録しました')
+  }
+
+  static async fetchWictionary (input_word) {
     const result = await wiktionary(input_word).catch(() => null)
     if (result === null || result.definitions.length === 0) {
       console.error(`${input_word} can't receive any correct definitions from Wictionary`)
       process.exit(1)
     } else {
-      word = new Word(result.word, result.definitions)
+      return new Word(result.word, result.definitions)
     }  
+  }
 
-    await Storage.insert(word)
-    word.displayDefinitions()
-    console.log('登録しました')
+  static showMessage (key) {
+    let message
+    if (key === 'exist') {
+      message = 'This word already exists in the local database. To overwrite it by current Wiktionary informations, use -u option with the word.'
+    }
+    console.log(message)
   }
 }
 
 class Word {
+  static async all (allRows) {
+    return allRows.map(row =>
+      new Word(
+        row.name,
+        JSON.parse(row.definitions),
+        new Date(row.updated_at),
+        new Date(row.created_at)
+      )
+    )
+  }
+
   constructor (name, definitions, updatedAt = new Date(), createdAt = new Date()) {
     this.name = name
     this.definitions = definitions
@@ -84,8 +130,8 @@ class Word {
     })
   }
 
-  displayName () {
-    console.log(`${this.name} ${this.updatedAt}`)
+  displayTitle () {
+    return `${this.updatedAt.toLocaleDateString()} ${this.updatedAt.toLocaleTimeString().substring(0, 5)} ${this.name}`
   }
 }
 
@@ -104,7 +150,7 @@ class Storage {
   }
 
   static async selectAll () {
-    const query = `SELECT name, definitions, updated_at, created_at FROM ${tableName}`
+    const query = `SELECT rowid, name, definitions, updated_at, created_at FROM ${tableName}`
     const db = this.connect()
     return new Promise(function (resolve, reject) {
       try {
@@ -144,6 +190,62 @@ class Storage {
     } finally {
       db.close()
     }
+  }
+
+  static update (word) {
+    const query = `UPDATE ${tableName} SET definitions = ?, updated_at = ? WHERE name = ?;`
+    const db = this.connect()
+    try {
+      db.serialize(function () {
+        const stmt = db.prepare(query)
+        stmt.run(
+          JSON.stringify(word.definitions),
+          word.updatedAt,
+          word.name
+        )
+        stmt.finalize()
+      })
+    } catch (e) {
+      return e
+    } finally {
+      db.close()
+    }
+  }
+
+  static async exist (word_name) {
+    const query = `SELECT true WHERE EXISTS(SELECT * FROM words WHERE name = ?);`
+    const db = this.connect()
+    return new Promise(function (resolve, reject) {
+      try {
+        db.get(query, word_name, function (error, result) {
+          if (error) throw new Error(error)
+          resolve(result)
+        })
+      } catch (e) {
+        return reject(e)
+      } finally {
+        db.close()
+      }
+    })
+  }
+
+  static async deleteBy (idx) {
+    const query = `delete from ${tableName} where rowid = (?)`
+    const db = this.connect()
+    return new Promise(function (resolve, reject) {
+      try {
+        db.serialize(function () {
+          const stmt = db.prepare(query)
+          stmt.run(idx)
+          stmt.finalize()
+        })
+        return resolve()
+      } catch (e) {
+        return reject(e)
+      } finally {
+        db.close()
+      }
+    })
   }
 }
 
