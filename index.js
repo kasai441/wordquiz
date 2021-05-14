@@ -9,6 +9,12 @@ const currentDir = process.cwd()
 const databaseName = `${currentDir}/wordquiz.sqlite3`
 const tableName = 'words'
 
+const EnglishVerbs = require('english-verbs-helper');
+const Irregular = require('english-verbs-irregular/dist/verbs.json');
+const Gerunds = require('english-verbs-gerunds/dist/gerunds.json');
+
+const VerbsData = EnglishVerbs.mergeVerbsData(Irregular, Gerunds);
+
 // const words = ['Sunday', 'jump', 'magazine', 'champion', 'king', 'ribbon', 'ciao']
 
 class WordQuiz {
@@ -85,8 +91,9 @@ class WordQuiz {
       await Storage.update(word)
     }
 
+    console.log('A word is registerd as below.')
+    console.log('')
     word.displayDefinitions()
-    console.log('Registerd.')
   }
 
   static async fetchWictionary (input_word) {
@@ -122,13 +129,12 @@ class Quiz {
     let rownum = this.getRandomInt(0, wordsLength.count)
     const row = await Storage.findBy(rownum)
     this.word = Word.create(row)
-    console.log('QUESTION:')
-    console.log('  What word has these definitions?')
+    console.log('Answer a word which means definitions below.')
+    console.log('')
     console.log('='.repeat(16))
     this.word.displayDefinitions()
     console.log('='.repeat(16))
     console.log('ANSWER:')
-    console.log('  Your answer is:')
     console.log('-'.repeat(16))
     await this.input()
   }
@@ -156,7 +162,7 @@ class Quiz {
       console.log('  Right!')
     } else {
       console.log('-'.repeat(16))
-      console.log('  The right answer is:')
+      console.log('  The Right Answer:')
       console.log('-'.repeat(16))
       console.log(this.word.name)
       console.log('-'.repeat(16))
@@ -193,14 +199,62 @@ class Word {
 
   displayDefinitions () {
     this.definitions.forEach(definition => {
-      console.log('- ' + definition.speech)
+      const speech = this.hideAnswer(definition.speech)
+      console.log(`${speech}`)
       const lines = definition.lines
       for (let j = 0; j < 3 && j < lines.length; j++) {
         const line = lines[j]
-        console.log((j + 1) + '. ' + line.define)
-        if (line.examples.length > 0) console.log("'" + line.examples[0] + "'")        
+        const define = this.hideAnswer(line.define)
+        console.log(` ${ (j + 1)}. ${define}`)
+        if (line.examples.length > 0) {
+          const examples = this.hideAnswer(line.examples[0])
+          console.log(`  '${examples}'`)
+        }
       }
     })
+  }
+
+  hideAnswer (definition) {
+    if (typeof definition === 'string') {
+      this.replaceTables(this.name).forEach(replaceTable => {
+        definition = definition.replace(new RegExp(replaceTable[0], 'gi'), replaceTable[1])
+      }) 
+      // console.log(this.replaceTables(this.name))
+    }
+    return definition
+  }
+
+  replaceTables (word) {
+    this.tenses = [
+      'PAST',
+      'PRESENT',
+      'PROGRESSIVE_PRESENT',
+      'PERFECT_PRESENT'
+    ]
+    
+    let replaceTable = []
+    let replacee, replacer
+    for (let tense of this.tenses) {
+      replacee = EnglishVerbs.getConjugation(VerbsData, word, tense, 'S').replace('is ', '').replace('has ', '')
+      replacer = this.replacer(tense)
+      replaceTable.push([replacee, replacer])
+    }
+    replaceTable.push([word, '___'])
+
+    return replaceTable
+  }
+
+  replacer (tense) {
+    switch (tense) {
+      case this.tenses[0]:
+        return '__d'
+      case this.tenses[1]:
+        return '__s'
+      case this.tenses[2]:
+        return '__ing'
+      case this.tenses[3]:
+        return '_(pp)_'
+    }
   }
 
   displayTitle () {
