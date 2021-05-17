@@ -1,12 +1,12 @@
-## REGISTER WORDS DEFINITONS AND QUIZ IT !
+## Features
 In terminal you can receive word definitions written on Wictionary. Once you get a word, it is registered in your local Sqlite3 database, from which you can randomly select a word in the form of quiz.
 
-## INSTALL
+## Installation
 ```
 $ npm install wordquiz
 ```
 
-## USAGE
+## Usage
 It works with your terminal by commanding with an argument or options.
 
 ### Register a word
@@ -75,7 +75,5 @@ Noun
 ----------------
   Right!
 ```
-## LICENSE
+## License
 MIT
-
-## KEYWORDS

@@ -5,8 +5,15 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "kasai441",
   "license": "MIT",
+  "bin": {
+    "jikanhun": "index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kasai441/wordquiz.git"
+  },
   "description": "",
   "dependencies": {
     "english-verbs-gerunds": "^2.0.0",
