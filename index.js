@@ -82,6 +82,10 @@ class WordQuiz {
       word = await this.fetchWictionary(input_word)
       await Storage.insert(word)
     } else {
+      if (!await Storage.exist(argv.u)) {
+        console.log(`This word doesn't exist yet in the database. To register newly, use not -u option but only a word as an argument.`)
+        process.exit(0)
+      }
       word = await this.fetchWictionary(argv.u)
       await Storage.update(word)
     }
@@ -241,22 +245,29 @@ class Word {
 }
 
 class Storage {
-  static connect () {
+  static async connect () {
     const db = new sqlite3.Database(databaseName)
-    db.run(`
-      CREATE TABLE IF NOT EXISTS ${tableName} (
-        name TEXT PRIMARY KEY,
-        definitions TEXT,
-        updated_at NUMERIC,
-        created_at NUMERIC        
-      )
-    `)
-    return db
-  }
+    return new Promise(function (resolve, reject) {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS ${tableName} (
+          name TEXT PRIMARY KEY,
+          definitions TEXT,
+          updated_at NUMERIC,
+          created_at NUMERIC
+        )
+      `, (err) => {
+          if(err) {
+              reject(err);
+          } else {
+              resolve(db);
+          }
+        })
+      })
+    }
 
   static async selectAll () {
     const query = `SELECT rowid, name, definitions, updated_at, created_at FROM ${tableName}`
-    const db = this.connect()
+    const db = await this.connect()
     return new Promise(function (resolve, reject) {
       try {
         db.all(query, function (error, rows) {
@@ -273,7 +284,7 @@ class Storage {
 
   static async findBy (rownum) {
     const query = `SELECT * FROM ${tableName} LIMIT 1 OFFSET ?;`
-    const db = this.connect()
+    const db = await this.connect()
     return new Promise(function (resolve, reject) {
       try {
         db.get(query, rownum, function (error, result) {
@@ -290,7 +301,7 @@ class Storage {
 
   static async exist (word_name) {
     const query = `SELECT true WHERE EXISTS(SELECT * FROM ${tableName} WHERE name = ?);`
-    const db = this.connect()
+    const db = await this.connect()
     return new Promise(function (resolve, reject) {
       try {
         db.get(query, word_name, function (error, result) {
@@ -307,7 +318,7 @@ class Storage {
 
   static async wordsLength () {
     const query = `SELECT COUNT(*) AS count FROM ${tableName};`
-    const db = this.connect()
+    const db = await this.connect()
     return new Promise(function (resolve, reject) {
       try {
         db.get(query, function (error, result) {
@@ -322,14 +333,14 @@ class Storage {
     })
   }
 
-  static insert (word) {
+  static async insert (word) {
     const query = `INSERT INTO ${tableName} (
         name,
         definitions,
         updated_at,
         created_at
       ) VALUES (?, ?, ?, ?)`
-    const db = this.connect()
+    const db = await this.connect()
     try {
       db.serialize(function () {
         const stmt = db.prepare(query)
@@ -348,9 +359,9 @@ class Storage {
     }
   }
 
-  static update (word) {
+  static async update (word) {
     const query = `UPDATE ${tableName} SET definitions = ?, updated_at = ? WHERE name = ?;`
-    const db = this.connect()
+    const db = await this.connect()
     try {
       db.serialize(function () {
         const stmt = db.prepare(query)
@@ -370,7 +381,7 @@ class Storage {
 
   static async deleteBy (idx) {
     const query = `delete from ${tableName} where rowid = (?)`
-    const db = this.connect()
+    const db = await this.connect()
     return new Promise(function (resolve, reject) {
       try {
         db.serialize(function () {
