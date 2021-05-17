@@ -1,21 +1,14 @@
-const wiktionary = require('wiktionary-node')
-// eslint-disable-next-line no-undef
 const argv = require('minimist')(process.argv)
 const sqlite3 = require('sqlite3').verbose()
 const { Select } = require('enquirer')
-
-// eslint-disable-next-line no-undef
-const currentDir = process.cwd()
-const databaseName = `${currentDir}/wordquiz.sqlite3`
-const tableName = 'words'
-
+const wiktionary = require('wiktionary-node')
 const EnglishVerbs = require('english-verbs-helper');
 const Irregular = require('english-verbs-irregular/dist/verbs.json');
 const Gerunds = require('english-verbs-gerunds/dist/gerunds.json');
-
 const VerbsData = EnglishVerbs.mergeVerbsData(Irregular, Gerunds);
-
-// const words = ['Sunday', 'jump', 'magazine', 'champion', 'king', 'ribbon', 'ciao']
+const currentDir = process.cwd()
+const databaseName = `${currentDir}/wordquiz.sqlite3`
+const tableName = 'words'
 
 class WordQuiz {
   static run () {
@@ -28,7 +21,7 @@ class WordQuiz {
     } else if (argv._.length === 3 || argv.u) {
       this.register()
     } else if (argv._.length > 3) {
-      this.showMessage('excess')
+      console.log('The command argument has to be only one.')
     } else {
       this.isData()
       Quiz.start()
@@ -81,7 +74,7 @@ class WordQuiz {
 
     if (argv.u === undefined) {
       if (await Storage.exist(input_word)) {
-        this.showMessage('exist')
+        console.log('This word already exists in the database. To overwrite it by current Wiktionary information, use -u option with the word.')
         process.exit(0)
       }
       word = await this.fetchWictionary(input_word)
@@ -105,22 +98,6 @@ class WordQuiz {
       return new Word(result.word, result.definitions)
     }  
   }
-
-  static showMessage (key) {
-    let message
-    switch (key) {
-      case 'exist':
-        message = 'This word already exists in the database. To overwrite it by current Wiktionary informations, use -u option with the word.'
-        break;
-      case 'excess':
-        message = 'The command argument has to be only one.'
-        break;
-      default:
-        message = key
-        break;
-    }
-    console.log(message)
-  }
 }
 
 class Quiz {
@@ -129,12 +106,12 @@ class Quiz {
     let rownum = this.getRandomInt(0, wordsLength.count)
     const row = await Storage.findBy(rownum)
     this.word = Word.create(row)
-    console.log('Answer a word which means definitions below.')
+    console.log('  QUESTION: Answer a word which means definitions below.')
     console.log('')
     console.log('='.repeat(16))
     this.word.displayDefinitions()
     console.log('='.repeat(16))
-    console.log('ANSWER:')
+    console.log('  ANSWER:')
     console.log('-'.repeat(16))
     await this.input()
   }
@@ -219,7 +196,6 @@ class Word {
       this.replaceTables(this.name).forEach(replaceTable => {
         definition = definition.replace(new RegExp(replaceTable[0], 'gi'), replaceTable[1])
       }) 
-      // console.log(this.replaceTables(this.name))
     }
     return definition
   }
