@@ -8,11 +8,11 @@
   "author": "kasai441",
   "license": "MIT",
   "bin": {
-    "jikanhun": "index.js"
+    "wordquiz": "index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kasai441/wordquiz.git"
+    "url": "https://github.com/kasai441/wordquiz.git"
   },
   "description": "",
   "dependencies": {
