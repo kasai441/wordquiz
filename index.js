@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const argv = require('minimist')(process.argv)
 const sqlite3 = require('sqlite3').verbose()
 const { Select } = require('enquirer')
